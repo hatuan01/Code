@@ -1,0 +1,38 @@
+import requests
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin
+
+# === Configuration ===
+base_url = "http://your.internal.site/page"  # starting page
+session = requests.Session()  # use session if authentication is needed
+
+# === Step 1: Load the initial page and find all links ===
+response = session.get(base_url)
+soup = BeautifulSoup(response.text, 'html.parser')
+
+links = []
+for a_tag in soup.find_all('a', href=True):
+    full_url = urljoin(base_url, a_tag['href'])  # handles relative URLs
+    links.append(full_url)
+
+print(f"Found {len(links)} links.")
+
+# === Step 2: Visit each link and extract <table> data ===
+for link in links:
+    try:
+        print(f"\nVisiting: {link}")
+        page_response = session.get(link)
+        page_soup = BeautifulSoup(page_response.text, 'html.parser')
+
+        tables = page_soup.find_all('table')
+        print(f"Found {len(tables)} tables on this page.")
+
+        for i, table in enumerate(tables, start=1):
+            print(f"\n--- Table {i} ---")
+            for row in table.find_all('tr'):
+                cols = row.find_all(['td', 'th'])
+                row_data = [col.get_text(strip=True) for col in cols]
+                print(row_data)
+
+    except Exception as e:
+        print(f"Failed to process {link}: {e}")
