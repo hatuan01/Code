@@ -25,6 +25,25 @@ def extract_date_from_filename(filename):
 # === LOAD EXISTING RECONCILIATION FILE ===
 if os.path.exists(RECONCILIATION_FILE):
     reconciliation_df = pd.read_csv(RECONCILIATION_FILE, dtype=str)
+    reconciliation_df.fillna("", inplace=True)
+
+    # Check rows with blank alert_id and update from DB
+    print("Checking for existing rows with blank alert_id...")
+    updated = False
+    for i, row in reconciliation_df[reconciliation_df["alert_id"] == ""].iterrows():
+        sp_id = row["sharepoint_id"]
+        try:
+            cursor.execute("SELECT alert_id FROM alert_header WHERE sharepoint_id = :1", [sp_id])
+            result = cursor.fetchone()
+            if result:
+                reconciliation_df.at[i, "alert_id"] = result[0]
+                updated = True
+        except Exception as e:
+            print(f"Error querying DB for {sp_id}: {e}")
+
+    if updated:
+        reconciliation_df.to_csv(RECONCILIATION_FILE, index=False)
+        print("Reconciliation file updated with missing alert_ids.")
 else:
     reconciliation_df = pd.DataFrame(columns=["file_name", "sharepoint_id", "alert_id"])
 
