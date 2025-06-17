@@ -1,0 +1,38 @@
+import os
+import shutil
+import pandas as pd
+import cx_Oracle
+import glob
+import re
+from datetime import datetime
+
+# === CONFIGURATION ===
+OUTPUT_FOLDER = "Output"
+ARCHIVE_FOLDER = "Archive"
+RECONCILIATION_FILE = "Reconciliation.csv"
+
+DB_USER = "your_db_user"
+DB_PASSWORD = "your_db_password"
+DB_DSN = "your_db_host:port/service_name"  # e.g., "localhost:1521/orclpdb"
+
+# === UTILITY: Extract date from filename ===
+def extract_date_from_filename(filename):
+    match = re.search(r"SharePoint_UAR_(\d{8})\.csv", filename)
+    if match:
+        return datetime.strptime(match.group(1), "%Y%m%d")
+    return datetime.max  # invalid or unmatched files will go last
+
+# === LOAD EXISTING RECONCILIATION FILE ===
+if os.path.exists(RECONCILIATION_FILE):
+    reconciliation_df = pd.read_csv(RECONCILIATION_FILE, dtype=str)
+else:
+    reconciliation_df = pd.DataFrame(columns=["file_name", "sharepoint_id", "alert_id"])
+
+# === CONNECT TO ORACLE DATABASE ===
+connection = cx_Oracle.connect(DB_USER, DB_PASSWORD, DB_DSN)
+cursor = connection.cursor()
+
+# === GET AND SORT FILES BY DATE ===
+file_pattern = os.path.join(OUTPUT_FOLDER, "SharePoint_UAR_*.csv")
+files = glob.glob(file_pattern)
+files.sort(key=lambda x: extract_date_from_filename(os.path_
