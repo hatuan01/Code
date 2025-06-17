@@ -35,4 +35,60 @@ cursor = connection.cursor()
 # === GET AND SORT FILES BY DATE ===
 file_pattern = os.path.join(OUTPUT_FOLDER, "SharePoint_UAR_*.csv")
 files = glob.glob(file_pattern)
-files.sort(key=lambda x: extract_date_from_filename(os.path_
+files.sort(key=lambda x: extract_date_from_filename(os.path.basename(x)))
+
+# === PROCESS EACH FILE ===
+for file_path in files:
+    file_name = os.path.basename(file_path)
+    print(f"Processing {file_name}...")
+
+    try:
+        df = pd.read_csv(file_path, dtype=str)
+    except Exception as e:
+        print(f"Error reading {file_name}: {e}")
+        continue
+
+    if "sharepoint_id" not in df.columns:
+        print(f"Skipping {file_name} - missing 'sharepoint_id' column")
+        continue
+
+    df["file_name"] = file_name
+    df["alert_id"] = ""
+
+    new_rows = []
+
+    for _, row in df.iterrows():
+        sp_id = row["sharepoint_id"]
+        exists = ((reconciliation_df["file_name"] == file_name) &
+                  (reconciliation_df["sharepoint_id"] == sp_id)).any()
+
+        if not exists:
+            try:
+                cursor.execute("SELECT alert_id FROM alert_header WHERE sharepoint_id = :1", [sp_id])
+                result = cursor.fetchone()
+                alert_id = result[0] if result else ""
+            except Exception as e:
+                print(f"Error querying DB for {sp_id}: {e}")
+                alert_id = ""
+
+            new_rows.append({
+                "file_name": file_name,
+                "sharepoint_id": sp_id,
+                "alert_id": alert_id
+            })
+
+    if new_rows:
+        new_df = pd.DataFrame(new_rows)
+        reconciliation_df = pd.concat([reconciliation_df, new_df], ignore_index=True)
+        reconciliation_df.to_csv(RECONCILIATION_FILE, index=False)
+        print(f"Added {len(new_rows)} rows from {file_name} to {RECONCILIATION_FILE}")
+
+    # === MOVE FILE TO ARCHIVE ===
+    archive_path = os.path.join(ARCHIVE_FOLDER, file_name)
+    shutil.move(file_path, archive_path)
+    print(f"Moved {file_name} to Archive")
+
+# === CLEANUP ===
+cursor.close()
+connection.close()
+print("Processing complete.")
