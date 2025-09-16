@@ -1,0 +1,33 @@
+import os
+import pandas as pd
+
+# Paths
+input_folder = "path/to/txt_files"  # folder containing TXT files
+mapping_file = "path/to/mapping.csv"  # CSV with Source_Customer_Id, Target_Customer_Id
+output_folder = "path/to/output"      # output folder
+
+os.makedirs(output_folder, exist_ok=True)
+
+# Load mapping into dictionary
+mapping_df = pd.read_csv(mapping_file)
+mapping_dict = dict(zip(mapping_df["Source_Customer_Id"], mapping_df["Target_Customer_Id"]))
+
+# Process each TXT file
+for filename in os.listdir(input_folder):
+    if filename.lower().endswith(".txt"):
+        input_path = os.path.join(input_folder, filename)
+        output_path = os.path.join(output_folder, filename)
+
+        # Read TXT file
+        df = pd.read_csv(input_path, sep="\t", dtype=str)  # keep everything as string
+
+        # Replace Customer_Id if found in mapping
+        if "Customer_Id" in df.columns:
+            df["Customer_Id"] = df["Customer_Id"].apply(
+                lambda x: mapping_dict.get(x, x)
+            )
+
+        # Save output as tab-delimited
+        df.to_csv(output_path, sep="\t", index=False)
+
+        print(f"Processed: {filename} → {output_path}")
